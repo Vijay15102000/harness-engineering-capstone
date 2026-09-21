@@ -18,7 +18,7 @@ Replace each `→` with your answer. **Every answer cites at least one artifact 
 ### System 1 — Agentic loop
 
 1. **Loop control.** Quote the `stop_reason` sequence from one trace. Name the file and function that decides continue-vs-stop, and how.
-   → continue-vs-stop is decided in claims_intake/loop.py, function run_loop. After client.message.create, it branches on response.stop_reason:tool_use executed tools and continues;end_turn stops. Terminal trool route_to_adjauster/escalate_to_human set terminal_called and exit. evidence/system1-agentic-loop/traces/claim_05_auto_collission.jsonl shows tools_use then end_turn. summary.md(run 20260916_100855) marks that claim routed. six other rows in the same rummary.md are incomplete because the model ended after facts without a terminal tool
+   → the loop in claims_intake/loop.py continues when the model returns tool_use and stops when it returns end_turn. Terminal tools such as route_to_adjuster and escalate_to_human mark the claims as terminal and exit the loop. In the latest run, 4 of 8 claims were routed and 4 were incomplete, showing hopw the loop handles both terminal and non-terminal outcomes
 
 2. **Anti-pattern.** Name one anti-pattern `test_antipatterns.py` checks for. What would break in your run if the loop used it?
    → tests/test_antipatterns.py(29 passed in evidence/system1-agentic-loop/pytest.txt) flage ignoring stop_reason treating the first tool result as done, or treating end_turn as "keep going". If run_loop stopped after the first tool, claim_05_auto_collision.jsonl would never reach the later tool_use turns or route_to_adjuster. if it ignored end_turn, the loop would spin past a finished model run and turn blow wll clock/token caps. 
@@ -27,7 +27,7 @@ Replace each `→` with your answer. **Every answer cites at least one artifact 
    → classify_claim and assess_severity both consume structured claim facts, but the schemas split "what kind of loss" vs"how bad".route_to_adjuster vs escalate_to_human both end loop; description seperate confident routing from low confidence/injury/humanreviwe. A structured tool error(types fixed in toops.py) lets the next turn repair one argument insted of dumping a blob. That is why claim_01 could continue tool_use turns instead of dying on a string exception(outcome+error never appears in summary.md)
 
 4. **Your numbers.** Quote the turn count and cost for one claim. How does it differ from the README sample, and why?
-   → claim_05_auto_collission in summary.md(20260916_100855) completed routed after multiple  tool_use turns and ~14826 input tokens.The same file lists six incomplete claims that stopped after `2 TURNS/~6K TOKENS WITH NO classify_claim. Fulltime_estimated cost ~$0.40. That matches the project guide sample's mix of incomplete rows more that clean 8/8 terminal table.
+   → claim_05_autocollision used 14826 input tokens, poroduced 908 output tokens , took 4 turns and cost an esti,mate pof $0.0194. Four claims were incomplete : claim_01, claim_02, claim_06, claim_08; only claim_02 and claim_08 fit the roughly 2-turn,~6k inpuit token pattern
 
 ### System 2 — Context strategy
 
@@ -43,26 +43,25 @@ Replace each `→` with your answer. **Every answer cites at least one artifact 
 ### System 3 — Claude Code config
 
 8. **Path-scoped rules.** Quote the glob frontmatter from one rule file. Why is it better than a directory-level CLAUDE.md for cross-cutting conventions?
-   → Root evidence/system3-claude-code-config/CLAUD.md uses @import of .claude/standards/files keeping the root short and pushing details oin to imported standards 8s wgar test_us01_claude_md_hierarchy checks. Validator printed ok. 
+   → The rule applies to "**/*.test.tsx " and "**/*.test.ts" foles anywhere in the repo. A glob is better than directory-level CLAUDE.md becquse it follows the file type so the convention applies even when tests are scattered across different directories . 
 
 9. **Forked skill.** Quote the `context: fork` and `allowed-tools` lines. What does running forked + read-only buy you? What breaks without it?
-   → .claude/rules.api.md binds API-only globs , .claude/rules/react.md binds component/page globs .claude/rules/tests.md binds test globs. claude_dir_structure.txt and the copied rule files record those rules. Scoped rules stops a react rule from rewriting an APi handler.
+   → the Skill uses context:fork and a read-only allowed-tools list. Forking keeps intermediate work isolated from the oarent session, while the read-only tols limit the skill's ability to modify the repository.without them, the skill cloud pollute the parfent context or make unintended changes.
 
 10. **Scope.** From the validator output: project-level vs user-level scope. Give one example of each from this config.
-    → deploy-check/SKILL.md sets allowed tools to read-only checks. test_us04-deploy_check_skill passed. That limits blast radious if the skill is invoked on a fork.
+    → project level configuration includes .c.aude.md, .claude/standards/ and .claude/rules/ which are vetrsion controlled and shared with the team.
+    user level configuration includes ~/.claude/CLAUDE.md,~/.claude/commands/ and ~/.claude/skills/ which stay on the developer's machine and are not version controlled.
 
 ### System 4 — Orchestration
 
 11. **Push work down.** Defects the SQL query returned vs warm-tier total. Name the indexed query. Why does the model never see the full history?
-    → Hot: hot_state.json *643 bytes* 
-    warm: SQLite warm.sqlite plus defects_since indexed query so a shift doesnot load the full defect table 
-    cold: monthly summary. shift-run_output.txt/scratchpad show Shift C recorder-response completed with ) new defects in tat fixture.
+    → The warm tier contains 40 defects, while the indexed defects_since query returns only the required time slice: 4 rows with --since 2026-04-22 and 17 rows with --since 2026-04-01. The model recieves only these filtered results rather than the full 40 row history, keeping the historical retrieval targeted and reducing context usage.
 
 12. **Crash recovery.** The resume-vs-fresh decision and its staleness threshold (`recovery.py`). Why is a fresh start with an injected summary sometimes more reliable than resuming?
-    → shift_scratchpad.jsonl is append+fsynch, mid-write reads only complete lines (test_us034_crash_recovery). Fork states copies state into an independentscratchpad without mutating the base(test_us04_fork_scratchpad).resumes uses the last complete scratchpad line plue hot state.
+    → The recovery logic resumes state only when it is 30 days older or less; state older than 30 days is treated as fresh. A fresh run  with an injected summary avoids carrying potentially stale state, while a valid resource preserves prior partial findings and adds new defects.Ths decision is validsted by the crash-recovery truth tables.
 
 13. **Small state.** Byte size of your `hot_state.json`. Why does the budget matter for a system run once per shift, indefinitely?
-    → 643 bytes under the size budget the test enforce. A shift  job that runs forever cannot let hit state grow with every defect or the next process will exceed context and disk for "just the live pointer.warm/cold hold history", hot stays a pointer
+    → hot_state.json is 648 bytes under the size budget the test enforce. A shift  job that runs forever cannot let hit state grow with every defect or the next process will exceed context and disk for "just the live pointer.warm/cold hold history", hot stays a pointer
 
 ---
 
@@ -71,9 +70,9 @@ Replace each `→` with your answer. **Every answer cites at least one artifact 
 *Graded on connecting two or more systems. Cite a named file/artifact from each.*
 
 14. **Three layers.** Point to a file/artifact for each layer and justify.
-    → Model: claim_05_auto_collision.jsonl the llm chooses stop_reason.
-    → Harness:claims_intake/loop.py runloop plus pytest.txt - deterministic continue/stop.
-    → Orchestration:
+    → Model: System1's claim_05_auto_collision.jsonl trace shows the model using tools and eventually routing the clkaim.
+    → Harness:claims_intake/loop.py controls the stop_reason loop and terminal-tool handling.
+    → Orchestration: The shift pipeline assembles state,decides wheater to resume or startfresh, and manages hot state, cold history and isolated scratchpads.
 
 15. **Deterministic vs prompt.** Cite one behavior guaranteed in code (terminal tool, read-only allowlist, atomic write, byte budget) and one guided by prompt. When is each right?
     → Deterministic : system 1 branches on stop_reason in run_loop system 3 read-only alowed-tools on the forked-skill; System 4 hot state stayed 643 bytes Prompt-guided: which intake tool to call, and what system 2 summarizes vs keeps(budget.json).code is right for safety and budgets; prompt are right when the choice depends on claim language
@@ -92,7 +91,7 @@ Replace each `→` with your answer. **Every answer cites at least one artifact 
 ## Part 3 — Honest assessment
 
 19. **What broke.** One thing that failed first try in your environment, and how you fixed it. (If nothing, what you checked to be sure.)
-    → mis spelled the git commands whuke pushing the project to the repository "git add"  Fix: git commit -all to git add .
+    → across the five recorded runs , multiple claims repeatedly ended as incomplete rather than reaching a terminal routing/escaltion outcome.This indicates the loop can stop before calling a terminal tool, so would change the harness to route or escalate when the model stops without completing a terminal action. The five run artifact are under exercises/03-dynamic-decomposition/solution/runs/*/summary/md
 
 20. **What you'd change.** One architectural decision you'd make differently, grounded in what you observed.
     → set default low confidence path to human instead of end_turn. I would also iterate --fixture claim_01_kitchen_fire before --all to save budget when the key works. 
