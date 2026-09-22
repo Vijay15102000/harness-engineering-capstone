@@ -58,7 +58,7 @@ Replace each `→` with your answer. **Every answer cites at least one artifact 
     → The warm tier contains 40 defects, while the indexed defects_since query returns only the required time slice: 4 rows with --since 2026-04-22 and 17 rows with --since 2026-04-01. The model recieves only these filtered results rather than the full 40 row history, keeping the historical retrieval targeted and reducing context usage.
 
 12. **Crash recovery.** The resume-vs-fresh decision and its staleness threshold (`recovery.py`). Why is a fresh start with an injected summary sometimes more reliable than resuming?
-    → The recovery logic resumes state only when it is 30 days older or less; state older than 30 days is treated as fresh. A fresh run  with an injected summary avoids carrying potentially stale state, while a valid resource preserves prior partial findings and adds new defects.Ths decision is validsted by the crash-recovery truth tables.
+    → The recovery logic resumes state only when it is 30 minutes older or less; state older than 30 minute is treated as fresh. A fresh run  with an injected summary avoids carrying potentially stale state, while a valid resource preserves prior partial findings and adds new defects.Ths decision is validsted by the crash-recovery truth tables.
 
 13. **Small state.** Byte size of your `hot_state.json`. Why does the budget matter for a system run once per shift, indefinitely?
     → hot_state.json is 648 bytes under the size budget the test enforce. A shift  job that runs forever cannot let hit state grow with every defect or the next process will exceed context and disk for "just the live pointer.warm/cold hold history", hot stays a pointer
@@ -75,10 +75,10 @@ Replace each `→` with your answer. **Every answer cites at least one artifact 
     → Orchestration: The shift pipeline assembles state,decides wheater to resume or startfresh, and manages hot state, cold history and isolated scratchpads.
 
 15. **Deterministic vs prompt.** Cite one behavior guaranteed in code (terminal tool, read-only allowlist, atomic write, byte budget) and one guided by prompt. When is each right?
-    → Deterministic : system 1 branches on stop_reason in run_loop system 3 read-only alowed-tools on the forked-skill; System 4 hot state stayed 643 bytes Prompt-guided: which intake tool to call, and what system 2 summarizes vs keeps(budget.json).code is right for safety and budgets; prompt are right when the choice depends on claim language
+    → Deterministic : system 1 branches on stop_reason in run_loop system 3 read-only alowed-tools on the forked-skill; System 4 hot state stayed 648 bytes Prompt-guided: which intake tool to call, and what system 2 summarizes vs keeps(budget.json).code is right for safety and budgets; prompt are right when the choice depends on claim language
 
 16. **Context, two faces.** Compare context management in System 2 (intra-session) and System 4 (cross-session) with cited numbers from both. Same principle, different mechanism — how?
-    → System 2 is a intra-session : 38708-16779 tokens active kept vervatim. System 4 is cross-session:643-byte hot pointer plue warm defects_since instead of shipping the whole history every shift. Same idea dont reload everything different mechanism.
+    → System 2 is a intra-session : 38708-16779 tokens active kept vervatim. System 4 is cross-session:648-byte hot pointer plue warm defects_since instead of shipping the whole history every shift. Same idea dont reload everything different mechanism.
 
 17. **Reliability you can't see in one run.** Name one behavior a test guarantees that a single successful run would not reveal. Why does it matter before shipping?
     → crash recovery tests guarantee that at torn last line in shift_scratchpad.jsonl does not load as state .one happy shift c run would  not show that. it matters before shipping because a killed shift is the common case.
